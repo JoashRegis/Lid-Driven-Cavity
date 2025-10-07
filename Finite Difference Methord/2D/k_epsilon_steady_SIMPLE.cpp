@@ -2,7 +2,7 @@
 #include <iostream>
 #include <vector>
 #include <fstream>
-#include <algorithm> // For std::max
+#include <algorithm>
 
 using namespace std;
 
