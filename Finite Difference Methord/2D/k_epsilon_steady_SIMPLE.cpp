@@ -28,7 +28,7 @@ const double alpha_k = 0.7;
 const double alpha_epsilon = 0.7; 
 
 // constants for k-epsilon model
-const double kappa = 0.4187; // More precise value from textbook
+const double kappa = 0.4187;
 const double E = 9.793;
 const double C_mu = 0.09;
 const double sigma_k = 1.00;
