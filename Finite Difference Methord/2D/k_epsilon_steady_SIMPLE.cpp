@@ -39,7 +39,7 @@ const double sigma_epsilon = 1.30;
 const double C_1epsilon = 1.44;
 const double C_2epsilon = 1.92;
 
-const double rho = 1; // density
+const double rho = 32; // density
 const double mu = 0.01; // dynamic viscosity
 const double u_lid = 1; // top wall velocity
 double Re = rho * u_lid * lx / mu;
@@ -74,17 +74,13 @@ void setBoundaryConditions(vector<vector<double>>& u, vector<vector<double>>& v,
     double y_p = dy / 2.0;
     for (int i = 1; i < x; i++) {
         k[i][0] = k[i][1]; // Zero gradient for k
-        double u_tau = pow(k[i][1], 0.5) * pow(C_mu, 0.25);
-        double y_plus = rho * u_tau * y_p / mu;
-        epsilon[i][1] = y_plus < 5 ? (2 * k[i][1] * mu) / (y_p * rho) : pow(C_mu, 0.75) * pow(k[i][1], 1.5) / (kappa * y_p);
+        epsilon[i][1] = pow(k[i][1], 1.5) / (kappa * y_p);
     }
     
     // Top wall
     for (int i = 1; i < x; i++) {
         k[i][y] = k[i][y-1]; // Zero gradient for k
-        double u_tau = pow(k[i][y-1], 0.5) * pow(C_mu, 0.25);
-        double y_plus = rho * u_tau * y_p / mu;
-        epsilon[i][y-1] = y_plus < 5 ? (2 * k[i][y-1] * mu) / (y_p * rho) : pow(C_mu, 0.75) * pow(k[i][y-1], 1.5) / (kappa * y_p);
+        epsilon[i][y-1] = pow(k[i][y-1], 1.5) / (kappa * y_p);
     }
 
 
@@ -92,28 +88,24 @@ void setBoundaryConditions(vector<vector<double>>& u, vector<vector<double>>& v,
     double x_p = dx / 2.0;
     for (int j = 1; j < y; j++) {
         k[0][j] = k[1][j]; // Zero gradient for k
-        double u_tau = pow(k[1][j], 0.5) * pow(C_mu, 0.25);
-        double x_plus = rho * u_tau * x_p / mu;
-        epsilon[1][j] = x_plus < 5 ? (2 * k[1][j] * mu) / (x_p * rho) : pow(C_mu, 0.75) * pow(k[1][j], 1.5) / (kappa * x_p);
+        epsilon[1][j] = pow(C_mu, 0.75) * pow(k[1][j], 1.5) / (kappa * x_p);
     }
     
     // Right wall
     for (int j = 1; j < y; j++) {
         k[x][j] = k[x-1][j]; // Zero gradient for k
-        double u_tau = pow(k[x-1][j], 0.5) * pow(C_mu, 0.25);
-        double x_plus = rho * u_tau * x_p / mu;
-        epsilon[x-1][j] = x_plus < 5 ? (2 * k[x-1][j] * mu) / (x_p * rho) : pow(C_mu, 0.75) * pow(k[x-1][j], 1.5) / (kappa * x_p);
+        epsilon[x-1][j] = pow(C_mu, 0.75) * pow(k[x-1][j], 1.5) / (kappa * x_p);
     }
 }
 
 void calculateTurbulentViscosity(const vector<vector<double>>& k, const vector<vector<double>>& epsilon, vector<vector<double>>& mu_t) {
     for (int i = 0; i <=x; i++) {
         for (int j = 0; j <= y; j++) {
-            double Re_y = pow(k[i][j], 0.5) * abs(j - 0.5) * dy * rho / mu;
-            double Re_t = pow(k[i][j], 2) * rho / ((epsilon[i][j] + 1e-10) * mu);
-            double val = pow(1 - exp(-0.0165 * Re_y), 2) * (1 + (20.5 / Re_t));
-            double f_mu = Re > 3200 ? 1 : val;
-            mu_t[i][j] = rho * C_mu * f_mu * k[i][j] * k[i][j] / (epsilon[i][j] + 1e-10);
+            // double Re_y = pow(k[i][j], 0.5) * abs(j - 0.5) * dy * rho / mu;
+            // double Re_t = pow(k[i][j], 2) * rho / ((epsilon[i][j] + 1e-10) * mu);
+            // double val = pow(1 - exp(-0.0165 * Re_y), 2) * (1 + (20.5 / Re_t));
+            // double f_mu = Re > 3200 ? 1 : val;
+            mu_t[i][j] = rho * C_mu  * k[i][j] * k[i][j] / (epsilon[i][j] + 1e-10);
         }
     }
 }
@@ -281,12 +273,12 @@ void solveKEpsilon(const vector<vector<double>>& u, const vector<vector<double>>
     // solving for epsilon
     for (int i = 1; i < x; i++) {
         for (int j = 1; j < y; j++) {
-            double Re_y = pow(k[i][j], 0.5) * abs(j - 0.5) * dy * rho / mu;
-            double Re_t = pow(k[i][j], 2) * rho / ((epsilon[i][j] + 1e-10) * mu);
-            double val = pow(1 - exp(-0.0165 * Re_y), 2) * (1 + (20.5 / Re_t));
-            double f_mu = Re > 3200 ? 1 : val;
-            double f_1 = pow(1 + (0.05 / f_mu), 3);
-            double f_2 = 1 - exp(- pow(Re_t, 2));
+            // double Re_y = pow(k[i][j], 0.5) * abs(j - 0.5) * dy * rho / mu;
+            // double Re_t = pow(k[i][j], 2) * rho / ((epsilon[i][j] + 1e-10) * mu);
+            // double val = pow(1 - exp(-0.0165 * Re_y), 2) * (1 + (20.5 / Re_t));
+            // double f_mu = Re > 3200 ? 1 : val;
+            // double f_1 = pow(1 + (0.05 / f_mu), 3);
+            // double f_2 = 1 - exp(- pow(Re_t, 2));
 
             double u_e = 0.5 * (u[i][j] + u[i][j+1]);     
             double u_w = 0.5 * (u[i-1][j] + u[i-1][j+1]); 
@@ -299,7 +291,7 @@ void solveKEpsilon(const vector<vector<double>>& u, const vector<vector<double>>
             double epsilon_diff = (mu_eff_eps / rho) * ((epsilon[i+1][j] - 2 * epsilon[i][j] + epsilon[i-1][j]) / (dx * dx) + (epsilon[i][j+1] - 2 * epsilon[i][j] + epsilon[i][j-1]) / (dy * dy));
 
             double k_val = max(k[i][j], 1e-10);
-            double epsilon_source = (1 / rho) * ((C_1epsilon * f_1 * epsilon[i][j] * Pk[i][j] / k_val) -  (C_2epsilon * f_2 * rho * pow(epsilon[i][j], 2) / k_val));
+            double epsilon_source = (1 / rho) * ((C_1epsilon * epsilon[i][j] * Pk[i][j] / k_val) -  (C_2epsilon * rho * pow(epsilon[i][j], 2) / k_val));
 
             epsilon_star[i][j] = epsilon[i][j] + dt * (epsilon_diff - epsilon_conv + epsilon_source);
         }
@@ -326,7 +318,7 @@ void writeResults(const vector<vector<double>>& u, const vector<vector<double>>&
         return;
     }
 
-    outfile << "i,j,X,Y,U,V,P,k,epsilon,mu_t\n";
+    outfile << "x,y,X,Y,U,V,P,k,epsilon,mu_t\n";
 
     for (int j = 0; j < y; ++j) {
         for (int i = 0; i < x; ++i) {
@@ -349,60 +341,6 @@ void writeResults(const vector<vector<double>>& u, const vector<vector<double>>&
     cout << "\nResults written to results.csv" << endl;
 }
 
-// int main() {
-//     // Initializing grids for different flow fields
-//     vector<vector<double>> u(x, vector<double>(y + 1, 0));
-//     vector<vector<double>> u_old = u;
-//     vector<vector<double>> v(x + 1, vector<double>(y, 0));
-//     vector<vector<double>> p(x + 1, vector<double>(y + 1, 0));
-//     vector<vector<double>> u_star(x, vector<double>(y + 1, 0));
-//     vector<vector<double>> v_star(x + 1, vector<double>(y, 0));
-//     vector<vector<double>> p_prime(x + 1, vector<double>(y + 1, 0));
-//     vector<vector<double>> k(x + 1, vector<double>(y + 1, 1e-6));
-//     vector<vector<double>> epsilon(x + 1, vector<double>(y + 1, 1e-6));
-//     vector<vector<double>> mu_t(x + 1, vector<double>(y + 1, 0));
-
-//     setBoundaryConditions(u, v, k, epsilon);
-//     int iter = 0;
-//     double max_err = 1;
-
-//     //for (int iter = 0; iter < max_iter; iter++) {
-//     while (max_err > max_tol) {
-//         max_err = 0;
-
-//         calculateTurbulentViscosity(k, epsilon, mu_t);
-
-//         solveMomentum(u, v, p, u_star, v_star, mu_t);
-
-//         pressureCorrection(u_star, v_star, p_prime);
-
-//         correctFields(u, v, p, u_star, v_star, p_prime);
-
-//         solveKEpsilon(u, v, k, epsilon, mu_t);
-
-//         setBoundaryConditions(u, v, k, epsilon);
-
-//         for (int j = 0; j <= y; j++) {
-//             max_err = max(max_err, abs(u_old[64][j] - u[64][j]));
-//         }
-        
-//         if (iter % 100 == 0) {
-//             cout << "Iteration: " <<iter << " " << max_err << "\r" << flush;
-//         }
-
-//         if (iter % 1000 == 0) {
-//             writeResults(u, v, p, k, epsilon, mu_t, iter);
-//         }
-        
-//         iter += 1;
-//         u_old = u;
-//     }
-    
-//     writeResults(u, v, p, k, epsilon, mu_t);
-
-//     return 0;
-// }
-
 int main() {
     // Initializing grids for different flow fields
     vector<vector<double>> u(x, vector<double>(y + 1, 0));
@@ -417,8 +355,12 @@ int main() {
     vector<vector<double>> mu_t(x + 1, vector<double>(y + 1, 0));
 
     setBoundaryConditions(u, v, k, epsilon);
+    int iter = 0;
+    double max_err = 1;
 
-    for (int iter = 0; iter < max_iter; iter++) {
+    //for (int iter = 0; iter < max_iter; iter++) {
+    while (max_err > max_tol) {
+        max_err = 0;
 
         calculateTurbulentViscosity(k, epsilon, mu_t);
 
@@ -431,13 +373,63 @@ int main() {
         solveKEpsilon(u, v, k, epsilon, mu_t);
 
         setBoundaryConditions(u, v, k, epsilon);
+
+        for (int j = 0; j <= y; j++) {
+            max_err = max(max_err, abs(u_old[64][j] - u[64][j]));
+        }
         
         if (iter % 100 == 0) {
-            cout << "Iteration: " <<iter << "\r" << flush;
+            cout << "Iteration: " <<iter << " " << max_err << "\r" << flush;
         }
+
+        if (iter % 1000 == 0) {
+            writeResults(u, v, p, k, epsilon, mu_t, iter);
+        }
+        
+        iter += 1;
+        u_old = u;
     }
     
     writeResults(u, v, p, k, epsilon, mu_t);
 
     return 0;
 }
+
+// int main() {
+//     // Initializing grids for different flow fields
+//     vector<vector<double>> u(x, vector<double>(y + 1, 0));
+//     vector<vector<double>> u_old = u;
+//     vector<vector<double>> v(x + 1, vector<double>(y, 0));
+//     vector<vector<double>> p(x + 1, vector<double>(y + 1, 0));
+//     vector<vector<double>> u_star(x, vector<double>(y + 1, 0));
+//     vector<vector<double>> v_star(x + 1, vector<double>(y, 0));
+//     vector<vector<double>> p_prime(x + 1, vector<double>(y + 1, 0));
+//     vector<vector<double>> k(x + 1, vector<double>(y + 1, 1e-6));
+//     vector<vector<double>> epsilon(x + 1, vector<double>(y + 1, 1e-6));
+//     vector<vector<double>> mu_t(x + 1, vector<double>(y + 1, 0));
+
+//     setBoundaryConditions(u, v, k, epsilon);
+
+//     for (int iter = 0; iter < max_iter; iter++) {
+
+//         calculateTurbulentViscosity(k, epsilon, mu_t);
+
+//         solveMomentum(u, v, p, u_star, v_star, mu_t);
+
+//         pressureCorrection(u_star, v_star, p_prime);
+
+//         correctFields(u, v, p, u_star, v_star, p_prime);
+
+//         solveKEpsilon(u, v, k, epsilon, mu_t);
+
+//         setBoundaryConditions(u, v, k, epsilon);
+        
+//         if (iter % 100 == 0) {
+//             cout << "Iteration: " <<iter << "\r" << flush;
+//         }
+//     }
+    
+//     writeResults(u, v, p, k, epsilon, mu_t);
+
+//     return 0;
+// }
