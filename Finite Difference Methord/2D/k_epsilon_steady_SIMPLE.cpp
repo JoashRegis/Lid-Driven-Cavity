@@ -78,7 +78,7 @@ void setBoundaryConditions(vector<vector<double>>& u, vector<vector<double>>& v,
 
     // Boundary conditions k-epsilon
     // Bottom wall
-    double y_p = dy / 2.0;
+    double y_p = dy / 2;
     for (int i = 1; i < x; i++) {
         k[i][0] = k[i][1]; // Zero gradient for k
         double u_tau = pow(C_mu, 0.25) * pow(k[i][1], 0.5);
@@ -301,9 +301,9 @@ void solveKEpsilon(const vector<vector<double>>& u, const vector<vector<double>>
             double y_wall = getWallDistance(i,j);
             double Re_y = sqrt(k[i][j]) * y_wall / nu;
             double Re_t = k[i][j]*k[i][j] / ((epsilon[i][j] + 1e-10) * nu);
-            double f_mu = pow(1.0 - exp(-0.0165 * Re_y), 2.0) * (1.0 + (20.5 / (Re_t + 1e-10)));
-            f_1 = 1.0 + pow(0.05 / f_mu, 3.0);
-            f_2 = 1.0 - exp(-pow(Re_t, 2.0));
+            double f_mu = pow(1.0 - exp(-0.0165 * Re_y), 2) * (1.0 + (20.5 / (Re_t + 1e-10)));
+            f_1 = pow(1 + (0.05 / f_mu), 3);
+            f_2 = 1 - exp(-pow(Re_t, 2));
             }
 
             double u_e = 0.5 * (u[i][j] + u[i][j+1]);     
