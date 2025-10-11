@@ -1,10 +1,7 @@
-#include <cmath>
-#include <cstdlib>
 #include <iostream>
 #include <vector>
 #include <fstream>
 #include <string>
-#include <algorithm>
 
 using namespace std;
 
@@ -31,7 +28,7 @@ const double alpha_k = 0.7;
 const double alpha_epsilon = 0.7; 
 
 // constants for k-epsilon model
-const double kappa = 0.4187; // More precise value from textbook 
+const double kappa = 0.4187; // Von Karman's factor
 // const double E = 9.793;
 const double C_mu = 0.09;
 const double sigma_k = 1.00;
@@ -39,11 +36,11 @@ const double sigma_epsilon = 1.30;
 const double C_1epsilon = 1.44;
 const double C_2epsilon = 1.92;
 
-const double rho = 4; // density
+const double rho = 1; // density
 const double mu = 0.01; // dynamic viscosity
 const double u_lid = 1; // top wall velocity
 const double nu = mu / rho;
-double Re = rho * u_lid * lx / mu;
+double Re = rho * u_lid * lx / mu; // Re = 100 for rho = 1
 
 double getWallDistance(int i, int j) {
     double y_dist = min((j - 0.5) * dy, ly - (j - 0.5) * dy);
@@ -96,7 +93,7 @@ void setBoundaryConditions(vector<vector<double>>& u, vector<vector<double>>& v,
 
 
     // Left wall
-    double x_p = dx / 2.0;
+    double x_p = dx / 2;
     for (int j = 1; j < y; j++) {
         k[0][j] = k[1][j]; // Zero gradient for k
         double u_tau = pow(C_mu, 0.25) * pow(k[1][j], 0.5);
@@ -122,7 +119,7 @@ void calculateTurbulentViscosity(const vector<vector<double>>& k, const vector<v
             double y_wall = getWallDistance(i, j);
             double Re_y = sqrt(k[i][j]) * y_wall / nu;
             double Re_t = k[i][j] * k[i][j] / ((epsilon[i][j] + 1e-10) * nu);
-            f_mu = pow(1.0 - exp(-0.0165 * Re_y), 2.0) * (1.0 + (20.5 / (Re_t + 1e-10)));
+            f_mu = pow(1 - exp(-0.0165 * Re_y), 2) * (1 + (20.5 / (Re_t + 1e-10)));
             }
 
             mu_t[i][j] = rho * C_mu  * f_mu * k[i][j] * k[i][j] / (epsilon[i][j] + 1e-10);
@@ -301,7 +298,7 @@ void solveKEpsilon(const vector<vector<double>>& u, const vector<vector<double>>
             double y_wall = getWallDistance(i,j);
             double Re_y = sqrt(k[i][j]) * y_wall / nu;
             double Re_t = k[i][j]*k[i][j] / ((epsilon[i][j] + 1e-10) * nu);
-            double f_mu = pow(1.0 - exp(-0.0165 * Re_y), 2) * (1.0 + (20.5 / (Re_t + 1e-10)));
+            double f_mu = pow(1 - exp(-0.0165 * Re_y), 2) * (1+ (20.5 / (Re_t + 1e-10)));
             f_1 = pow(1 + (0.05 / f_mu), 3);
             f_2 = 1 - exp(-pow(Re_t, 2));
             }
@@ -384,7 +381,6 @@ int main() {
     int iter = 0;
     double max_err = 1;
 
-    //for (int iter = 0; iter < max_iter; iter++) {
     while (max_err > max_tol) {
         max_err = 0;
 
