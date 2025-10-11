@@ -31,18 +31,25 @@ const double alpha_k = 0.7;
 const double alpha_epsilon = 0.7; 
 
 // constants for k-epsilon model
-const double kappa = 0.4187; // More precise value from textbook
-const double E = 9.793;
+const double kappa = 0.4187; // More precise value from textbook 
+// const double E = 9.793;
 const double C_mu = 0.09;
 const double sigma_k = 1.00;
 const double sigma_epsilon = 1.30;
 const double C_1epsilon = 1.44;
 const double C_2epsilon = 1.92;
 
-const double rho = 32; // density
+const double rho = 4; // density
 const double mu = 0.01; // dynamic viscosity
 const double u_lid = 1; // top wall velocity
+const double nu = mu / rho;
 double Re = rho * u_lid * lx / mu;
+
+double getWallDistance(int i, int j) {
+    double y_dist = min((j - 0.5) * dy, ly - (j - 0.5) * dy);
+    double x_dist = min((i - 0.5) * dx, lx - (i - 0.5) * dx);
+    return min(x_dist, y_dist);
+}
 
 void setBoundaryConditions(vector<vector<double>>& u, vector<vector<double>>& v, vector<vector<double>>& k, vector<vector<double>>& epsilon) {
     // normal velocity to left and right wall
@@ -74,13 +81,17 @@ void setBoundaryConditions(vector<vector<double>>& u, vector<vector<double>>& v,
     double y_p = dy / 2.0;
     for (int i = 1; i < x; i++) {
         k[i][0] = k[i][1]; // Zero gradient for k
-        epsilon[i][1] = pow(k[i][1], 1.5) / (kappa * y_p);
+        double u_tau = pow(C_mu, 0.25) * pow(k[i][1], 0.5);
+        double y_plus = rho * u_tau * y_p / mu;
+        epsilon[i][1] = y_plus > 11.25 ? (2 * k[i][1] * mu / rho * pow(y_p, 2)) : pow(C_mu, 0.75) * pow(k[i][1], 0.5) / (kappa * y_p);
     }
     
     // Top wall
     for (int i = 1; i < x; i++) {
         k[i][y] = k[i][y-1]; // Zero gradient for k
-        epsilon[i][y-1] = pow(k[i][y-1], 1.5) / (kappa * y_p);
+        double u_tau = pow(C_mu, 0.25) * pow(k[i][y-1], 0.5);
+        double y_plus = rho * u_tau * y_p / mu;
+        epsilon[i][y-1] = y_plus > 11.25 ? (2 * k[i][y-1] * mu / rho * pow(y_p, 2)) : pow(C_mu, 0.75) * pow(k[i][y-1], 0.5) / (kappa * y_p);
     }
 
 
@@ -88,24 +99,33 @@ void setBoundaryConditions(vector<vector<double>>& u, vector<vector<double>>& v,
     double x_p = dx / 2.0;
     for (int j = 1; j < y; j++) {
         k[0][j] = k[1][j]; // Zero gradient for k
-        epsilon[1][j] = pow(C_mu, 0.75) * pow(k[1][j], 1.5) / (kappa * x_p);
+        double u_tau = pow(C_mu, 0.25) * pow(k[1][j], 0.5);
+        double x_plus = rho * u_tau * x_p / mu;
+        epsilon[1][j] = x_plus > 11.25 ? (2 * k[1][j] * mu / rho * pow(x_p, 2)) : pow(C_mu, 0.75) * pow(k[1][j], 0.5) / (kappa * x_p);
     }
     
     // Right wall
     for (int j = 1; j < y; j++) {
         k[x][j] = k[x-1][j]; // Zero gradient for k
-        epsilon[x-1][j] = pow(C_mu, 0.75) * pow(k[x-1][j], 1.5) / (kappa * x_p);
+        double u_tau = pow(C_mu, 0.25) * pow(k[1][j], 0.5);
+        double x_plus = rho * u_tau * x_p / mu;
+        epsilon[x-1][j] = x_plus > 11.25 ? (2 * k[x-1][j] * mu / rho * pow(x_p, 2)) : pow(C_mu, 0.75) * pow(k[x-1][j], 0.5) / (kappa * x_p);
     }
 }
 
 void calculateTurbulentViscosity(const vector<vector<double>>& k, const vector<vector<double>>& epsilon, vector<vector<double>>& mu_t) {
     for (int i = 0; i <=x; i++) {
         for (int j = 0; j <= y; j++) {
-            // double Re_y = pow(k[i][j], 0.5) * abs(j - 0.5) * dy * rho / mu;
-            // double Re_t = pow(k[i][j], 2) * rho / ((epsilon[i][j] + 1e-10) * mu);
-            // double val = pow(1 - exp(-0.0165 * Re_y), 2) * (1 + (20.5 / Re_t));
-            // double f_mu = Re > 3200 ? 1 : val;
-            mu_t[i][j] = rho * C_mu  * k[i][j] * k[i][j] / (epsilon[i][j] + 1e-10);
+            double f_mu = 1;
+
+            if (Re <= 3200) {
+            double y_wall = getWallDistance(i, j);
+            double Re_y = sqrt(k[i][j]) * y_wall / nu;
+            double Re_t = k[i][j] * k[i][j] / ((epsilon[i][j] + 1e-10) * nu);
+            f_mu = pow(1.0 - exp(-0.0165 * Re_y), 2.0) * (1.0 + (20.5 / (Re_t + 1e-10)));
+            }
+
+            mu_t[i][j] = rho * C_mu  * f_mu * k[i][j] * k[i][j] / (epsilon[i][j] + 1e-10);
         }
     }
 }
@@ -273,12 +293,18 @@ void solveKEpsilon(const vector<vector<double>>& u, const vector<vector<double>>
     // solving for epsilon
     for (int i = 1; i < x; i++) {
         for (int j = 1; j < y; j++) {
-            // double Re_y = pow(k[i][j], 0.5) * abs(j - 0.5) * dy * rho / mu;
-            // double Re_t = pow(k[i][j], 2) * rho / ((epsilon[i][j] + 1e-10) * mu);
-            // double val = pow(1 - exp(-0.0165 * Re_y), 2) * (1 + (20.5 / Re_t));
-            // double f_mu = Re > 3200 ? 1 : val;
-            // double f_1 = pow(1 + (0.05 / f_mu), 3);
-            // double f_2 = 1 - exp(- pow(Re_t, 2));
+
+            double f_1 = 1;
+            double f_2 = 1;
+
+            if (Re <= 3200) {
+            double y_wall = getWallDistance(i,j);
+            double Re_y = sqrt(k[i][j]) * y_wall / nu;
+            double Re_t = k[i][j]*k[i][j] / ((epsilon[i][j] + 1e-10) * nu);
+            double f_mu = pow(1.0 - exp(-0.0165 * Re_y), 2.0) * (1.0 + (20.5 / (Re_t + 1e-10)));
+            f_1 = 1.0 + pow(0.05 / f_mu, 3.0);
+            f_2 = 1.0 - exp(-pow(Re_t, 2.0));
+            }
 
             double u_e = 0.5 * (u[i][j] + u[i][j+1]);     
             double u_w = 0.5 * (u[i-1][j] + u[i-1][j+1]); 
@@ -291,7 +317,7 @@ void solveKEpsilon(const vector<vector<double>>& u, const vector<vector<double>>
             double epsilon_diff = (mu_eff_eps / rho) * ((epsilon[i+1][j] - 2 * epsilon[i][j] + epsilon[i-1][j]) / (dx * dx) + (epsilon[i][j+1] - 2 * epsilon[i][j] + epsilon[i][j-1]) / (dy * dy));
 
             double k_val = max(k[i][j], 1e-10);
-            double epsilon_source = (1 / rho) * ((C_1epsilon * epsilon[i][j] * Pk[i][j] / k_val) -  (C_2epsilon * rho * pow(epsilon[i][j], 2) / k_val));
+            double epsilon_source = (1 / rho) * ((C_1epsilon * f_1 * epsilon[i][j] * Pk[i][j] / k_val) -  (C_2epsilon * f_2 * rho * pow(epsilon[i][j], 2) / k_val));
 
             epsilon_star[i][j] = epsilon[i][j] + dt * (epsilon_diff - epsilon_conv + epsilon_source);
         }
@@ -382,7 +408,7 @@ int main() {
             cout << "Iteration: " <<iter << " " << max_err << "\r" << flush;
         }
 
-        if (iter % 1000 == 0) {
+        if (iter % 20000 == 0) {
             writeResults(u, v, p, k, epsilon, mu_t, iter);
         }
         
