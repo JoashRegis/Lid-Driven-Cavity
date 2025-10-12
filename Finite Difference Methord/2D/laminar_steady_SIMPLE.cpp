@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <fstream>
+#include <omp.h>
 
 using namespace std;
 
@@ -12,39 +13,45 @@ const int y = 129;
 const double lx = 1;
 const double ly = 1;
 
-const double dx = lx / (x - 1); //  x spaceing between grids2e3
+const double dx = lx / (x - 1); //  x spaceing between grids
 const double dy = ly / (y - 1); // y spacing between grids
 const double dt = 0.0005; // time step
-const double alpha_p = 0.8; // relaxation factor for pressure
-const double alpha_u = 0.7;
-const double alpha_v = 0.7;
+const double alpha_p = 0.3; // relaxation factor for pressure
+const double alpha_u = 0.5;
+const double alpha_v = 0.5;
 const int max_iter = 20000;
 // double max_err = 1;
 
-const double rho = 1; // density
+const double rho = 1; // density 
 const double mu = 0.01; // dynamic viscosity
 const double u_lid = 1; // top wall velocity
 
 void setBoundaryConditions(vector<vector<double>>& u, vector<vector<double>>& v) {
     // normal velocity to left and right wall
+    #pragma omp parallel for 
     for (int j = 0; j <= y; j++) {
         u[0][j] = 0;
         u[x-1][j] = 0;
     }
+    
 
     // normal velocity to top and bottom wall
+    # pragma omp parallel for 
     for (int i = 0; i <= x; i++) {
         v[i][0] = 0;
         v[i][y-1] = 0;
     }
 
+
     // tangential velocity of right and left wall
+    # pragma omp parallel for 
     for (int j = 1; j < y - 1; j++) {
         v[0][j] = -v[1][j];
         v[x][j] = -v[x-1][j];
     }
 
     // tangential velocity for top and bottom wall
+    # pragma omp parallel for 
     for (int i = 1; i < x - 1; i++) {
         u[i][0] = -u[i][1];
         u[i][y] = 2 * u_lid - u[i][y-1];
@@ -54,6 +61,7 @@ void setBoundaryConditions(vector<vector<double>>& u, vector<vector<double>>& v)
 void solveMomentum(const vector<vector<double>>& u, const vector<vector<double>>& v, const vector<vector<double>>& p, vector<vector<double>>& u_star, vector<vector<double>>& v_star) {
 
     // solving for x-momentum equation
+    # pragma omp parallel for collapse(2)
     for (int i = 1; i < x - 1; i++) {
         for (int j = 1; j < y; j++) {
             // average values of u, v in u-grid cell
@@ -78,6 +86,7 @@ void solveMomentum(const vector<vector<double>>& u, const vector<vector<double>>
     }
 
     // solving for y-momentum equation
+    # pragma omp parallel for collapse(2)
     for (int i = 1; i < x; i++) {
         for (int j = 1; j < y - 1; j++) {
             // average values of u, v in v-grid cell
@@ -104,6 +113,7 @@ void solveMomentum(const vector<vector<double>>& u, const vector<vector<double>>
 
 void pressureCorrection(const vector<vector<double>>& u_star, const vector<vector<double>>& v_star, vector<vector<double>>& p_prime) {
     // setting all values of  p_prime to zero
+    # pragma omp parallel for 
     for (auto& row : p_prime) {
         fill(row.begin(), row.end(), 0);
     }
@@ -115,8 +125,9 @@ void pressureCorrection(const vector<vector<double>>& u_star, const vector<vecto
     double b = -1 * (dt / (dx * dx));
     double c = -1 * (dt / (dy * dy));
 
-    // calculating mass source for every point
+    // calculating mass source for every point 
     vector<vector<double>> d(x + 1, vector<double>(y + 1, 0));
+    # pragma omp parallel for
     for (int i = 1; i < x; i++) {
         for (int j = 1; j < y; j++) {
             d[i][j] = ((1 / dx) * (rho * u_star[i][j] - rho * u_star[i-1][j])) + ((1 / dy) * (rho * v_star[i][j] - rho * v_star[i][j-1]));
@@ -134,11 +145,13 @@ void pressureCorrection(const vector<vector<double>>& u_star, const vector<vecto
         }
 
         // applying boundary conditions
+        # pragma omp parallel for 
         for (int i = 1; i < x; i++) {
             p_prime[i][0] = p_prime[i][1];
             p_prime[i][y] = p_prime[i][y-1];
         }
 
+        # pragma omp parallel for 
         for (int j = 1; j < y; j++) {
             p_prime[0][j] = p_prime[1][j];
             p_prime[x][j] = p_prime[x-1][j];
@@ -153,6 +166,7 @@ void pressureCorrection(const vector<vector<double>>& u_star, const vector<vecto
 void correctFields(vector<vector<double>>& u, vector<vector<double>>& v, vector<vector<double>>& p, const vector<vector<double>>& u_star, const vector<vector<double>>& v_star, const vector<vector<double>>& p_prime) {
     
     // u field
+    # pragma omp parallel for collapse(2)
     for (int i = 1; i < x - 1; i++) {
         for (int j = 1; j < y; j++) {
             u[i][j] = (u_star[i][j] - (dt / rho) * (p_prime[i+1][j] - p_prime[i][j]) / dx) * alpha_u + (1 - alpha_u) * u[i][j];
@@ -160,6 +174,7 @@ void correctFields(vector<vector<double>>& u, vector<vector<double>>& v, vector<
     }
 
     // v field
+    # pragma omp parallel for collapse(2)
     for (int i = 1; i < x; i++) {
         for (int j = 1; j < y - 1; j++) {
             v[i][j] = (v_star[i][j] - (dt / rho) * (p_prime[i][j+1] - p_prime[i][j]) / dy) * alpha_v + (1 - alpha_v) * v[i][j];
@@ -167,6 +182,7 @@ void correctFields(vector<vector<double>>& u, vector<vector<double>>& v, vector<
     }
 
     // p field
+    # pragma omp parallel for collapse(2)
     for (int i = 1; i < x; i++) {
         for (int j = 1; j < y; j++) {
             p[i][j] += alpha_p * p_prime[i][j];
@@ -207,18 +223,22 @@ int main() {
 
     // Initializing grids for different flow fields
     vector<vector<double>> u(x, vector<double>(y + 1, 0));
-    // vector<vector<double>> u_old(x, vector<double>(y + 1, 0));
+    vector<vector<double>> u_old(x, vector<double>(y + 1, 0));
     vector<vector<double>> v(x + 1, vector<double>(y, 0));
     vector<vector<double>> p(x + 1, vector<double>(y + 1, 0));
     vector<vector<double>> u_star(x, vector<double>(y + 1, 0));
     vector<vector<double>> v_star(x + 1, vector<double>(y, 0));
     vector<vector<double>> p_prime(x + 1, vector<double>(y + 1, 0));
 
+    double start_time = omp_get_wtime();
     setBoundaryConditions(u, v);
 
-    for (int iter = 0; iter < max_iter; iter++) {
-        // max_err = 0;
-        // u_old = u;
+    double max_err = 1e-7;
+    int iter = 0;
+    while (max_err > 1e-8) {
+    //for (int iter = 0; iter < max_iter; iter++) {
+        max_err = 0;
+        u_old = u;
         solveMomentum(u, v, p, u_star, v_star);
 
         pressureCorrection(u_star, v_star, p_prime);
@@ -226,16 +246,19 @@ int main() {
         correctFields(u, v, p, u_star, v_star, p_prime);
 
         setBoundaryConditions(u, v);
-        // for (int j = 0; j <= y; j++) {
-        //     max_err = max(max_err, abs(u_old[64][j] - u[64][j]));
-        // }
-        if (iter % 100 == 0) {
-            cout << "Iteration: " << iter <<  "\r" << flush;
+
+        for (int j = 0; j <= y; j++) {
+            max_err = max(max_err, abs(u_old[64][j] - u[64][j]));
         }
-        
+        if (iter % 100 == 0) {
+            cout << "Iteration: " << iter << " " << max_err <<  "\r" << flush;
+        }
+        iter++;    
     }
 
     writeResults(u, v, p);
+    double stop_time = omp_get_wtime();
+    cout << stop_time - start_time << endl;
 
     return 0;
 }

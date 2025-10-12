@@ -2,6 +2,7 @@
 #include <vector>
 #include <fstream>
 #include <string>
+#include <omp.h>
 
 using namespace std;
 
@@ -50,24 +51,28 @@ double getWallDistance(int i, int j) {
 
 void setBoundaryConditions(vector<vector<double>>& u, vector<vector<double>>& v, vector<vector<double>>& k, vector<vector<double>>& epsilon) {
     // normal velocity to left and right wall
+    # pragma omp parallel for
     for (int j = 0; j <= y; j++) {
         u[0][j] = 0;
         u[x-1][j] = 0;
     }
 
     // normal velocity to top and bottom wall
+    # pragma omp parallel for
     for (int i = 0; i <= x; i++) {
         v[i][0] = 0;
         v[i][y-1] = 0;
     }
 
     // tangential velocity of right and left wall
+    # pragma omp parallel for
     for (int j = 1; j < y - 1; j++) {
         v[0][j] = -v[1][j];
         v[x][j] = -v[x-1][j];
     }
 
     // tangential velocity for top and bottom wall
+    # pragma omp parallel for
     for (int i = 1; i < x - 1; i++) {
         u[i][0] = -u[i][1];
         u[i][y] = 2 * u_lid - u[i][y-1];
@@ -76,6 +81,7 @@ void setBoundaryConditions(vector<vector<double>>& u, vector<vector<double>>& v,
     // Boundary conditions k-epsilon
     // Bottom wall
     double y_p = dy / 2;
+    # pragma omp parallel for
     for (int i = 1; i < x; i++) {
         k[i][0] = k[i][1]; // Zero gradient for k
         double u_tau = pow(C_mu, 0.25) * pow(k[i][1], 0.5);
@@ -84,6 +90,7 @@ void setBoundaryConditions(vector<vector<double>>& u, vector<vector<double>>& v,
     }
     
     // Top wall
+    # pragma omp parallel for
     for (int i = 1; i < x; i++) {
         k[i][y] = k[i][y-1]; // Zero gradient for k
         double u_tau = pow(C_mu, 0.25) * pow(k[i][y-1], 0.5);
@@ -94,6 +101,7 @@ void setBoundaryConditions(vector<vector<double>>& u, vector<vector<double>>& v,
 
     // Left wall
     double x_p = dx / 2;
+    # pragma omp parallel for
     for (int j = 1; j < y; j++) {
         k[0][j] = k[1][j]; // Zero gradient for k
         double u_tau = pow(C_mu, 0.25) * pow(k[1][j], 0.5);
@@ -102,6 +110,7 @@ void setBoundaryConditions(vector<vector<double>>& u, vector<vector<double>>& v,
     }
     
     // Right wall
+    # pragma omp parallel for
     for (int j = 1; j < y; j++) {
         k[x][j] = k[x-1][j]; // Zero gradient for k
         double u_tau = pow(C_mu, 0.25) * pow(k[1][j], 0.5);
@@ -111,6 +120,8 @@ void setBoundaryConditions(vector<vector<double>>& u, vector<vector<double>>& v,
 }
 
 void calculateTurbulentViscosity(const vector<vector<double>>& k, const vector<vector<double>>& epsilon, vector<vector<double>>& mu_t) {
+
+    # pragma omp parallel for collapse(2)
     for (int i = 0; i <=x; i++) {
         for (int j = 0; j <= y; j++) {
             double f_mu = 1;
@@ -129,6 +140,7 @@ void calculateTurbulentViscosity(const vector<vector<double>>& k, const vector<v
 
 void solveMomentum(const vector<vector<double>>& u, const vector<vector<double>>& v, const vector<vector<double>>& p, vector<vector<double>>& u_star, vector<vector<double>>& v_star, const vector<vector<double>>& mu_t) {
     // solving for x-momentum equation
+    # pragma omp parallel for collapse(2)
     for (int i = 1; i < x - 1; i++) {
         for (int j = 1; j < y; j++) {
             // average values of u, v in u-grid cell
@@ -155,6 +167,7 @@ void solveMomentum(const vector<vector<double>>& u, const vector<vector<double>>
     }
 
     // solving for y-momentum equation
+    # pragma omp parallel for collapse(2)
     for (int i = 1; i < x; i++) {
         for (int j = 1; j < y - 1; j++) {
             // average values of u, v in v-grid cell
@@ -182,6 +195,7 @@ void solveMomentum(const vector<vector<double>>& u, const vector<vector<double>>
 }
 
 void pressureCorrection(const vector<vector<double>>& u_star, const vector<vector<double>>& v_star, vector<vector<double>>& p_prime) {
+    # pragma omp parallel for
     for (auto& row : p_prime) {
         fill(row.begin(), row.end(), 0);
     }
@@ -194,6 +208,7 @@ void pressureCorrection(const vector<vector<double>>& u_star, const vector<vecto
     double c = -1 * (dt / (dy * dy));
 
     vector<vector<double>> d(x + 1, vector<double>(y + 1, 0));
+    # pragma omp parallel for collapse(2)
     for (int i = 1; i < x; i++) {
         for (int j = 1; j < y; j++) {
             d[i][j] = ((1 / dx) * (rho * u_star[i][j] - rho * u_star[i-1][j])) + ((1 / dy) * (rho * v_star[i][j] - rho * v_star[i][j-1]));
@@ -210,11 +225,13 @@ void pressureCorrection(const vector<vector<double>>& u_star, const vector<vecto
             }
         }
 
+        # pragma omp parallel for
         for (int i = 1; i < x; i++) {
             p_prime[i][0] = p_prime[i][1];
             p_prime[i][y] = p_prime[i][y-1];
         }
 
+        # pragma omp parallel for
         for (int j = 1; j < y; j++) {
             p_prime[0][j] = p_prime[1][j];
             p_prime[x][j] = p_prime[x-1][j];
@@ -227,18 +244,21 @@ void pressureCorrection(const vector<vector<double>>& u_star, const vector<vecto
 }
 
 void correctFields(vector<vector<double>>& u, vector<vector<double>>& v, vector<vector<double>>& p, const vector<vector<double>>& u_star, const vector<vector<double>>& v_star, const vector<vector<double>>& p_prime) {
+    # pragma omp parallel for collapse(2)
     for (int i = 1; i < x - 1; i++) {
         for (int j = 1; j < y; j++) {
             u[i][j] = (1 - alpha_u) * u[i][j] + alpha_u * (u_star[i][j] - (dt / rho) * (p_prime[i+1][j] - p_prime[i][j]) / dx);
         }
     }
 
+    # pragma omp parallel for collapse(2)
     for (int i = 1; i < x; i++) {
         for (int j = 1; j < y - 1; j++) {
             v[i][j] = (1 - alpha_v) * v[i][j] + alpha_v * (v_star[i][j] - (dt / rho) * (p_prime[i][j+1] - p_prime[i][j]) / dy);
         }
     }
 
+    # pragma omp parallel for collapse(2)
     for (int i = 1; i < x; i++) {
         for (int j = 1; j < y; j++) {
             p[i][j] += alpha_p * p_prime[i][j];
@@ -251,6 +271,7 @@ void solveKEpsilon(const vector<vector<double>>& u, const vector<vector<double>>
     vector<vector<double>> k_star = k;
     vector<vector<double>> epsilon_star = epsilon;
 
+    # pragma omp parallel for collapse(2)
     for (int i = 1; i < x; i++) {
         for (int j = 1; j < y; j++) {
             double dudx = (u[i][j] - u[i-1][j]) / dx;
@@ -269,6 +290,7 @@ void solveKEpsilon(const vector<vector<double>>& u, const vector<vector<double>>
     }
 
     // solving for k
+    # pragma omp parallel for collapse(2)
     for (int i = 1; i < x; i++) {
         for (int j = 1; j < y; j++) {
             double u_e = 0.5 * (u[i][j] + u[i][j+1]);     
@@ -288,6 +310,7 @@ void solveKEpsilon(const vector<vector<double>>& u, const vector<vector<double>>
     }
 
     // solving for epsilon
+    # pragma omp parallel for collapse(2)
     for (int i = 1; i < x; i++) {
         for (int j = 1; j < y; j++) {
 
@@ -321,6 +344,7 @@ void solveKEpsilon(const vector<vector<double>>& u, const vector<vector<double>>
     }
 
     // updating k and epsilon with under-relaxation
+    # pragma omp parallel for
     for (int i = 1; i < x; i++) {
         for (int j = 1; j < y; j++) {
             k[i][j] = (1 - alpha_k) * k[i][j] + alpha_k * k_star[i][j];
@@ -376,6 +400,7 @@ int main() {
     vector<vector<double>> k(x + 1, vector<double>(y + 1, 1e-6));
     vector<vector<double>> epsilon(x + 1, vector<double>(y + 1, 1e-6));
     vector<vector<double>> mu_t(x + 1, vector<double>(y + 1, 0));
+    double start_time = omp_get_wtime();
 
     setBoundaryConditions(u, v, k, epsilon);
     int iter = 0;
@@ -413,6 +438,8 @@ int main() {
     }
     
     writeResults(u, v, p, k, epsilon, mu_t);
+    double stop_time = omp_get_wtime();
+    cout << stop_time - start_time << endl;
 
     return 0;
 }
