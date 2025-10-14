@@ -279,8 +279,12 @@ int main() {
 
         if (iter % 100 == 0) {
             cout << "Iteration: " << iter << " " << max_err << "\r" << flush;
+        }
+
+        if (iter % 1000 == 0) {
             writeResults(u, v, p, iter);
         }
+        
         iter++;
     }
 
