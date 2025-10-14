@@ -1,4 +1,3 @@
-#include <algorithm>
 #include <vector>
 #include <iostream>
 #include <fstream>
@@ -16,11 +15,11 @@ const double ly = 1;
 
 const double dx = lx / (x - 1); //  x spacing between grids
 const double dy = ly / (y - 1); // y spacing between grids
-const double alpha_p = 0.8; // relaxation factor for pressure
-const double alpha_u = 0.7; // relaxation factor for u-velocity
-const double alpha_v = 0.7; // relaxation factor for v-velocity
+const double alpha_p = 0.3; // relaxation factor for pressure
+const double alpha_u = 0.5; // relaxation factor for u-velocity
+const double alpha_v = 0.5; // relaxation factor for v-velocity
 // const double max_tol = 1e-8;
-const int max_iter = 100000;
+// const int max_iter = 100000;
 
 // double max_err = 1;
 
@@ -71,6 +70,7 @@ void solveMomentum(const vector<vector<double>>& u, const vector<vector<double>>
             double Dn = mu * dx / dy;
             double Ds = mu * dx / dy;
 
+            // hybrid scheme
             double ae = max({-Fe, De - 0.5 * Fe, 0.0});
             double aw = max({Fw, Dw + 0.5 * Fw, 0.0});
             double an = max({-Fn, Dn - 0.5 * Fn, 0.0});
@@ -106,6 +106,7 @@ void solveMomentum(const vector<vector<double>>& u, const vector<vector<double>>
             double Dn = mu * dx / dy;
             double Ds = mu * dx / dy;
 
+            // hybrid scheme
             double ae = max({-Fe, De - 0.5 * Fe, 0.0});
             double aw = max({Fw, Dw + 0.5 * Fw, 0.0});
             double an = max({-Fn, Dn - 0.5 * Fn, 0.0});
