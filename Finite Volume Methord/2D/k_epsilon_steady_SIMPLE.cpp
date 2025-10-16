@@ -21,11 +21,11 @@ const double dy = ly / (y - 1); // y spacing between grids
 const double max_tol = 1e-8;
 
 // relaxation factors
-const double alpha_p = 0.8;
-const double alpha_u = 0.7;
-const double alpha_v = 0.7;
-const double alpha_k = 0.7;
-const double alpha_epsilon = 0.7; 
+const double alpha_p = 0.3;
+const double alpha_u = 0.5;
+const double alpha_v = 0.5;
+const double alpha_k = 0.5;
+const double alpha_epsilon = 0.5; 
 
 // constants for k-epsilon model
 const double kappa = 0.4187; // Von Karman's factor
@@ -36,7 +36,7 @@ const double sigma_epsilon = 1.30;
 const double C_1epsilon = 1.44;
 const double C_2epsilon = 1.92;
 
-const double rho = 1; // density
+const double rho = 50; // density
 const double mu = 0.01; // dynamic viscosity
 const double u_lid = 1; // top wall velocity
 const double nu = mu / rho;
@@ -82,6 +82,12 @@ void setBoundaryCondition(vector<vector<double>>& u, vector<vector<double>>& v, 
         epsilon[i][y-1] = y_plus > 11.63 ? (2 * k[i][y-1] * mu / rho * pow(y_p, 2)) : pow(C_mu, 0.75) * pow(k[i][y-1], 0.5) / (kappa * y_p);
     }
 
+    for (int i = 1; i < x; i++) {
+        k[i][0] = k[i][1]; // Zero gradient for k
+        double u_tau = pow(C_mu, 0.25) * pow(k[i][1], 0.5);
+        double y_plus = rho * u_tau * y_p / mu;
+        epsilon[i][1] = y_plus > 11.63 ? (2 * k[i][1] * mu / rho * pow(y_p, 2)) : pow(C_mu, 0.75) * pow(k[i][1], 1.5) / (kappa * y_p);
+    }
 
     // Left wall
     double x_p = dx / 2;
@@ -462,11 +468,12 @@ int main() {
             max_err = max(max_err, abs(u_old[65][j] - u[65][j]));
         }
         
-        if (iter % 100 == 0) {
-            cout << "Iteration: " <<iter << " " << max_err << "\r" << flush;
-        }
+        // if (iter % 100 == 0) {
+        //     cout << "Iteration: " <<iter << " " << max_err << "\r" << flush;
+        // }
+        cout << "Iteration: " <<iter << " " << max_err << "\r" << flush;
 
-        if (iter % 1000 == 0) {
+        if (iter % 2000 == 0) {
             writeResults(u, v, p, k, epsilon, mu_t, iter);
         }
         
