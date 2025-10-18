@@ -22,11 +22,11 @@ const double dy = ly / (y - 1); // y spacing between grids
 const double max_tol = 1e-8;
 
 // relaxation factors
-const double alpha_p = 0.8;
-const double alpha_u = 0.7;
-const double alpha_v = 0.7;
-const double alpha_k = 0.7;
-const double alpha_omega = 0.7;
+const double alpha_p = 0.1;
+const double alpha_u = 0.2;
+const double alpha_v = 0.2;
+const double alpha_k = 0.2;
+const double alpha_omega = 0.2;
 
 // solver constants
 const double sigma_k_1 = 0.85;
@@ -41,11 +41,11 @@ const double beta_star = 0.09;
 const double a_1 = 0.31;
 
 // fluid parameters
-const double rho = 1; // density
+const double rho = 75; // density
 const double mu = 0.01; // dynamic viscosity
 const double u_lid = 1; // top wall velocity
 const double nu = mu / rho;
-const double Re = rho * u_lid * lx / mu; // Re = 100 for rho = 1
+// const double Re = rho * u_lid * lx / mu; // Re = 100 for rho = 1
 
 double getWallDistance(int i, int j) {
     double y_dist = min((j - 0.5) * dy, ly - (j - 0.5) * dy);
@@ -54,49 +54,41 @@ double getWallDistance(int i, int j) {
 }
 
 void setBoundaryCondition(vector<vector<double>>& u, vector<vector<double>>& v, vector<vector<double>>& k, vector<vector<double>>& omega) {
-    // u for bottom and top wall
-    for (int i = 0; i < x; i++) {
-        u[i][0] = -u[i][1];
-        u[i][y] = 2.0 * u_lid - u[i][y - 1];
-    }
+    
+    const double omega_wall_y = (6.0 * nu) / (beta_1 * pow(0.5 * dy, 2));
+    const double omega_wall_x = (6.0 * nu) / (beta_1 * pow(0.5 * dx, 2));
 
-    // v for left and right wall
-    for (int j = 0; j < y; j++) {
-        v[0][j] = -v[1][j];
-        v[x][j] = -v[x - 1][j];
-    }
-
-    // u for left and right wall
-    for (int j = 0; j < y + 1; j++) {
-        u[0][j] = 0;
-        u[x - 1][j] = 0;
-    }
-
-    // v for top and bottom wall
-    for (int i = 0; i < x + 1; i++) {
+    // Top and Bottom Walls
+    for (int i = 0; i <= x; ++i) {
         v[i][0] = 0;
         v[i][y - 1] = 0;
     }
+    for (int i = 0; i < x; ++i) {
+        u[i][0] = -u[i][1];             
+        k[i][0] = k[i][1];              
+        omega[i][0] = omega_wall_y;     
 
-    double omega_x = (60 * nu) / (beta_1 * pow(0.5 * dx, 2));
-    double omega_y = (60 * nu) / (beta_1 * pow(0.5 * dy, 2));
-
-    for (int i = 1; i < x; i++) {
-        k[i][y] = k[i][y-1];
-        k[i][0] = k[i][1];
-        omega[i][1] = omega_y;
-        omega[i][0] = omega_y;
-        omega[i][y] = omega_y;
-        omega[i][y-1] = omega_y;
+        u[i][y] = 2.0 * u_lid - u[i][y - 1]; 
+        k[i][y] = k[i][y - 1];          
+        omega[i][y] = omega_wall_y;     
     }
 
-    for (int j = 1; j < y; j++) {
-        k[0][j] = k[1][j];
-        k[x][j] = k[x-1][j];
-        omega[0][j] = omega_x;
-        omega[1][j] = omega_x;
-        omega[x][j] = omega_x;
-        omega[x-1][j] = omega_x;
+    // Left and Right Walls
+    for (int j = 0; j <= y; ++j) {
+        // u-velocity (impermeable)
+        u[0][j] = 0;
+        u[x - 1][j] = 0;
+    }
+    for (int j = 0; j < y; ++j) {
+        // Left Wall (x=0)
+        v[0][j] = -v[1][j];             
+        k[0][j] = k[1][j];              
+        omega[0][j] = omega_wall_x;     
+
+        // Right Wall (x=lx)
+        v[x][j] = -v[x - 1][j];         
+        k[x][j] = k[x - 1][j];          
+        omega[x][j] = omega_wall_x; 
     }
 }
 
@@ -110,8 +102,8 @@ void calculateTurbulentViscosity(const vector<vector<double>>& u, const vector<v
             double u_s = 0.25 * (u[i][j-1] + u[i-1][j-1] + u[i][j] + u[i-1][j]);
             double dudy = (u_n - u_s) / dy;
 
-            double v_e = 0.25 * (v[i][j] + v[i-1][j] + v[i+1][j] + v[i+1][j-1]);
-            double v_w = 0.25 * (v[i][j] + v[i-1][j] + v[i-1][j] + v[i-1][j-1]);
+            double v_e = 0.25 * (v[i][j] + v[i+1][j] + v[i][j-1] + v[i+1][j-1]);
+            double v_w = 0.25 * (v[i][j] + v[i-1][j] + v[i][j-1] + v[i-1][j-1]);
             double dvdx = (v_e - v_w) / dx;
 
             tensor_dot[i][j] = pow(dudx, 2) + pow(dvdy, 2) + 0.5 * pow(dudy + dvdx, 2);
@@ -235,8 +227,6 @@ void pressureCorrection(const vector<vector<double>>& u_star, const vector<vecto
             }
         }
 
-        // p_prime[1][1] = 0;
-
         // applying pressure boundary conditions (zerogradient)
         for (int i = 0; i < x + 1; i++) {
             p_prime[i][0] = p_prime[i][1];
@@ -292,7 +282,8 @@ void solvekOmegaSST(vector<vector<double>>& k, vector<vector<double>>& omega, ve
     for (int i = 1; i < x; i++) {
         for (int j = 1; j < y; j++) {
             Pk[i][j] = min(2 * mu_t[i][j] * tensor_dot[i][j], 10 * beta_star * rho * omega[i][j] * k[i][j]);
-            nabla_k_nabla_omega[i][j] = ((k[i+1][j] - k[i-1][j]) * (omega[i+1][j] - omega[i-1][j])) / (4 * dx * dx) + ((k[i][j+1] - k[i][j-1]) * (omega[i][j+1] - omega[i][j-1])) / (4 * dy * dy);
+            nabla_k_nabla_omega[i][j] = ((k[i+1][j] - k[i-1][j]) * (omega[i+1][j] - omega[i-1][j])) / (4 * dx * dx) 
+            + ((k[i][j+1] - k[i][j-1]) * (omega[i][j+1] - omega[i][j-1])) / (4 * dy * dy);
             double CD_komega = max(2 * rho * sigma_omega_2 * nabla_k_nabla_omega[i][j] / omega[i][j], 1e-10);
             double arg_1 = min(max(sqrt(k[i][j]) / (beta_star * omega[i][j] * getWallDistance(i, j)), (500 * nu) / (pow(getWallDistance(i, j), 2) * omega[i][j])), (4 * rho * sigma_omega_2 * k[i][j]) / (CD_komega * pow(getWallDistance(i, j), 2)));
             F_1[i][j] = tanh(pow(arg_1, 4));
