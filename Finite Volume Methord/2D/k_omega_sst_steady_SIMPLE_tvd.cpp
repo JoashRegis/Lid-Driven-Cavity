@@ -1,6 +1,3 @@
-#include <cmath>
-#include <algorithm>
-#include <cstdlib>
 #include <vector>
 #include <iostream>
 #include <fstream>
@@ -20,7 +17,7 @@ const double dy = ly / (y - 1);
 const double max_tol = 1e-8;            // Convergence tolerance
 
 // --- Fluid Properties ---
-const double rho = 10;    // Density
+const double rho = 32;    // Density
 const double mu = 0.01;  // Dynamic viscosity
 const double nu = mu / rho; // Kinematic viscosity
 
@@ -28,11 +25,11 @@ const double nu = mu / rho; // Kinematic viscosity
 const double u_lid = 1.0; // Top wall velocity
 
 // --- Relaxation Factors ---
-const double alpha_p = 0.3;
-const double alpha_u = 0.5;
-const double alpha_v = 0.5;
-const double alpha_k = 0.5;
-const double alpha_omega = 0.5;
+const double alpha_p = 0.1;
+const double alpha_u = 0.2;
+const double alpha_v = 0.2;
+const double alpha_k = 0.2;
+const double alpha_omega = 0.2;
 
 // solver constants
 const double beta_star = 0.09;
@@ -69,8 +66,8 @@ double fluxLimiter(double r) {
 
 void setBoundaryConditions(vector<vector<double>>& u, vector<vector<double>>& v, vector<vector<double>>& k, vector<vector<double>>& omega) {
     // Wall omega value based on distance to the first cell center
-    const double omega_wall_y = (6.0 * nu) / (beta_1 * pow(0.5 * dy, 2));
-    const double omega_wall_x = (6.0 * nu) / (beta_1 * pow(0.5 * dx, 2));
+    const double omega_wall_y = (60 * nu) / (beta_1 * pow(0.5 * dy, 2));
+    const double omega_wall_x = (60 * nu) / (beta_1 * pow(0.5 * dx, 2));
 
     // top and bottom u velocity
     for (int i = 1; i < x; ++i) {
@@ -83,16 +80,12 @@ void setBoundaryConditions(vector<vector<double>>& u, vector<vector<double>>& v,
         v[i][y-1] = 0;  
         
         // k = 0 at walls
-        k[i][0] = 0;
-        k[i][y] = 0;    
-        k[i][1] = 0;
-        k[i][y-1] = 0;
+        k[i][0] = -k[i][1];
+        k[i][y] = -k[i][y-1]; 
 
         // setting omega wall value
-        omega[i][0] = omega_wall_y;
-        omega[i][y] = omega_wall_y;
-        omega[i][1] = omega_wall_y;
-        omega[i][y-1] = omega_wall_y;
+        omega[i][0] = 2 * omega_wall_y - omega[i][1];
+        omega[i][y] = 2 * omega_wall_y - omega[i][y-1];
     }
 
     // v velocity at left and right wall
@@ -106,16 +99,12 @@ void setBoundaryConditions(vector<vector<double>>& u, vector<vector<double>>& v,
         u[x-1][j] = 0;
 
         // k = 0 at walls
-        k[0][j] = 0;
-        k[x][j] = 0;
-        k[1][j] = 0;
-        k[x-1][j] = 0;
+        k[0][j] = -k[1][j];
+        k[x][j] = -k[x-1][j];
 
         // setting omega wall value
-        omega[0][j] = omega_wall_x;
-        omega[x][j] = omega_wall_x;
-        omega[1][j] = omega_wall_x;
-        omega[x-1][j] = omega_wall_x;
+        omega[0][j] = 2 * omega_wall_x - omega[1][j];
+        omega[x][j] = 2 * omega_wall_x - omega[x-1][j];
     }
 }
 
@@ -424,6 +413,7 @@ void solveKOmegaSST(const vector<vector<double>>& u, const vector<vector<double>
     
     vector<vector<double>> Pk(x + 1, vector<double>(y + 1, 0));
     vector<vector<double>> F1(x + 1, vector<double>(y + 1, 0));
+    vector<vector<double>> grad_k_dot_grad_omega(x + 1, vector<double>(y + 1, 0));
     
     for (int i = 1; i < x; i++) {
         for (int j = 1; j < y; j++) {
@@ -432,9 +422,9 @@ void solveKOmegaSST(const vector<vector<double>>& u, const vector<vector<double>
             double dkdy = (k[i][j+1] - k[i][j-1]) / (2 * dy);
             double domegadx = (omega[i+1][j] - omega[i-1][j]) / (2 * dx);
             double domegady = (omega[i][j+1] - omega[i][j-1]) / (2 * dy);
-            double grad_k_dot_grad_omega = dkdx * domegadx + dkdy * domegady;
+            grad_k_dot_grad_omega[i][j] = dkdx * domegadx + dkdy * domegady;
 
-            double CD_k_omega = max(2 * rho * sigma_omega_2 * grad_k_dot_grad_omega / (omega[i][j] + 1e-9), 1e-10);
+            double CD_k_omega = max(2 * rho * sigma_omega_2 * grad_k_dot_grad_omega[i][j] / (omega[i][j] + 1e-9), 1e-10);
 
             // calculating F1 production term
             double wall_dist = getWallDistance(i, j);
@@ -621,12 +611,7 @@ void solveKOmegaSST(const vector<vector<double>>& u, const vector<vector<double>
             double an = Dn + max(-Fn, 0.0);
             
             // Cross-diffusion term
-            double dkdx = (k[i+1][j] - k[i-1][j]) / (2 * dx);
-            double dkdy = (k[i][j+1] - k[i][j-1]) / (2 * dy);
-            double domegadx = (omega[i+1][j] - omega[i-1][j]) / (2 * dx);
-            double domegady = (omega[i][j+1] - omega[i][j-1]) / (2 * dy);
-            double grad_k_dot_grad_omega = dkdx * domegadx + dkdy * domegady;
-            double cross_diffusion_term = 2 * (1 - F1[i][j]) * rho * sigma_omega_2 * (grad_k_dot_grad_omega / (omega[i][j] + 1e-9));
+            double cross_diffusion_term = 2 * (1 - F1[i][j]) * rho * sigma_omega_2 * (grad_k_dot_grad_omega[i][j] / (omega[i][j] + 1e-9));
 
             double su = (gamma / (mu_t[i][j]/rho + 1e-9) * Pk[i][j] + cross_diffusion_term) * dx * dy;
             double sp = -beta * rho * omega[i][j] * dx * dy;
