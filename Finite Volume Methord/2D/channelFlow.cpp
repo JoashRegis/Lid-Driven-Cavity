@@ -95,41 +95,31 @@ double massFlowRateRatio(const vector<vector<double>>& u, const vector<vector<do
 }
 
 void setBoundaryCondition(vector<vector<double>>& u, vector<vector<double>>& v) {
-
     // v for left and right wall
     for (int j = 0; j < y; j++) {
-        v[0][j] = -v[1][j];      // Inlet V: Usually 0 (or no-slip vertically)
-                                 // Better: v[0][j] = 0 for pure horizontal inlet
-        v[x][j] = v[x - 1][j];   // Outlet V: Zero Gradient
+        v[0][j] = -v[1][j];
+        v[x][j] = v[x - 1][j];
     }
-    // FIX: Force V=0 exactly at inlet face for plug flow
     for (int j = 0; j < y; j++) v[0][j] = 0.0;
 
-
-    // 2. WALLS (Apply Second - Overwrites Corners)
-    // u for bottom and top wall
     for (int i = 0; i < x; i++) {
-        u[i][0] = -u[i][1];      // Bottom Wall: No Slip
-        u[i][y] = -u[i][y - 1];  // Top Wall: No Slip
+        u[i][0] = -u[i][1];
+        u[i][y] = -u[i][y - 1]; 
     }
-
+    
     // v for top and bottom wall
     for (int i = 0; i < x + 1; i++) {
-        v[i][0] = 0;             // Bottom Wall: No Penetration
-        v[i][y - 1] = 0;         // Top Wall: No Penetration
+        v[i][0] = 0;
+        v[i][y - 1] = 0;
     }
 
     // u for left and right wall
     for (int j = 0; j < y + 1; j++) {
-        // INLET
+        // inlet
         if (j == 0 || j == y) u[0][j] = 0.0;
         else u[0][j] = u_lid;
 
         u[x-1][j] = u[x-2][j];
-
-        // OUTLET
-        // Only apply Zero Gradient to Predictor (u_star). 
-        // Do NOT touch final u, let correctFields handle it!
     }
 }
 
