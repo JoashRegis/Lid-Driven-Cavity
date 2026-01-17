@@ -6,11 +6,15 @@
 
 using namespace std;
 
-int x = 160; // number of grid points in radial direction (across diameter)
-int y = 60; // number of grid points in film thickness
+int x = 180; // number of grid points in radial direction (across diameter)
+int y = 30; // number of grid points in film thickness
 
-const double lx = 8.0; // diameter of circular disc (in m)
-const double ly = 3.0; // film thickness (in m)
+const double lx = 3.0; // diameter of circular disc (in m)
+const double ly = 0.5; // film thickness (in m)
+
+// step dimension
+const double sx = 0.75;
+const double sy = 0.25;
 
 double dx = lx / (x - 1); // distance between each grid point in radial direction
 double dy = ly / (y - 1); // distance between each grid point in z direction
@@ -21,22 +25,16 @@ const double alpha_u = 0.5;
 const double alpha_v = 0.5;
 
 // double v_vel = 0.05;
-const double u_lid = 0; // velocity of top squeeze plate in downward direction
-const double u_in = 0.5;
-const double temperature = 300; // assuming isothermal flow
+// const double u_lid = 0; // velocity of top squeeze plate in downward direction
+const double u_in = 1;
+const double temperature = 299.904; // assuming isothermal flow
 const double R = 287.05; // gas constant (air)
 const double atm = 101325; // atomspheric pressure
-double mu = 0.00392; // dynamic viscosity (air)
+double mu = 0.000294; // dynamic viscosity (air)
 
-const double T = 100; // total time of solver
+const double T = 20; // total time of solver
 const double dt = 0.1; // time step
 const double t_loop = 50; // iterations per time step
-
-// Cylinder Geometry
-const double cx = lx / 4.5; // Center x-coordinate (placed 1/3 downstream)
-const double cy = ly / 2.0; // Center y-coordinate (centered vertically)
-const double cr = 0.3;      // Cylinder radius
-const double cr_sq = cr * cr; // Radius squared (for distance check)
 
 struct linearSystem {
     vector<vector<double>> aP;
@@ -94,7 +92,9 @@ double massFlowRateRatio(const vector<vector<double>>& u, const vector<vector<do
     double massFlowIn = 0.0;
     double massFlowOut = 0.0;
     for (int j = 1; j < y; j++) {
-        massFlowIn += u[0][j] * 0.5 * (rho[0][j] + rho[1][j]);
+        if (j >= (sy * y / ly)) {
+            massFlowIn += u[0][j] * 0.5 * (rho[0][j] + rho[1][j]);
+        }
         massFlowOut += u[x-1][j] * 0.5 * (rho[x-1][j] + rho[x][j]);
     }
     if (abs(massFlowOut) < 1e-12) return 1.0;
@@ -105,7 +105,11 @@ void setBoundaryCondition(vector<vector<double>>& u, vector<vector<double>>& v) 
     // u for left and right wall
     for (int j = 0; j < y + 1; j++) {
         // inlet
-        u[0][j] = u_in;
+        if (j >= (sy * y / ly)) {
+            u[0][j] = u_in;
+        } else {
+            u[0][j] = 0.0;
+        }
         u[x-1][j] = u[x-2][j];
     }
 
@@ -117,8 +121,8 @@ void setBoundaryCondition(vector<vector<double>>& u, vector<vector<double>>& v) 
     for (int j = 0; j < y; j++) v[0][j] = 0.0;
 
     for (int i = 0; i < x; i++) {
-        u[i][0] = u[i][1];
-        u[i][y] = u[i][y - 1]; 
+        u[i][0] = -u[i][1];
+        u[i][y] = -u[i][y - 1]; 
     }
     
     // v for top and bottom wall
@@ -168,9 +172,9 @@ void solveMomentum(vector<vector<double>>& u, vector<vector<double>>& v, const v
             double y_pos = j * dy; 
 
             // Check distance to cylinder center
-            double dist_sq = (x_pos - cx)*(x_pos - cx) + (y_pos - cy)*(y_pos - cy);
+            // double dist_sq = (x_pos - cx)*(x_pos - cx) + (y_pos - cy)*(y_pos - cy);
 
-            if (dist_sq <= cr_sq) {
+            if (x_pos <= sx && y_pos <= sy) {
                 // Node is INSIDE obstacle
                 U.aE[i][j] = 0.0; U.aW[i][j] = 0.0; U.aN[i][j] = 0.0; U.aS[i][j] = 0.0; U.b[i][j] = 0.0;
                 U.aP[i][j] = 1.0e30; // Huge number to dominate the equation
@@ -217,9 +221,9 @@ void solveMomentum(vector<vector<double>>& u, vector<vector<double>>& v, const v
             double x_pos = i * dx;
             double y_pos = j * dy; 
 
-            double dist_sq = (x_pos - cx)*(x_pos - cx) + (y_pos - cy)*(y_pos - cy);
+            //double dist_sq = (x_pos - cx)*(x_pos - cx) + (y_pos - cy)*(y_pos - cy);
 
-            if (dist_sq <= cr_sq) {
+            if (x_pos <= sx && y_pos <= sy) {
                 V.aE[i][j] = 0.0; V.aW[i][j] = 0.0; V.aN[i][j] = 0.0; V.aS[i][j] = 0.0; V.b[i][j] = 0.0;
                 V.aP[i][j] = 1.0e30;
             } else {
