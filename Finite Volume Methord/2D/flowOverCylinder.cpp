@@ -9,11 +9,11 @@ using namespace std;
 int x = 160; // number of grid points in radial direction (across diameter)
 int y = 60; // number of grid points in film thickness
 
-const double lx = 8.0; // diameter of circular disc (in m)
-const double ly = 3.0; // film thickness (in m)
+const double lx = 8.0; // length
+const double ly = 3.0; // height
 
-double dx = lx / (x - 1); // distance between each grid point in radial direction
-double dy = ly / (y - 1); // distance between each grid point in z direction
+double dx = lx / (x - 1); // distance between each grid point in x direction
+double dy = ly / (y - 1); // distance between each grid point in y direction
 
 // relaxation factors
 const double alpha_p = 0.3;
@@ -21,9 +21,9 @@ const double alpha_u = 0.5;
 const double alpha_v = 0.5;
 
 // double v_vel = 0.05;
-const double u_lid = 0; // velocity of top squeeze plate in downward direction
+// const double u_lid = 0; // velocity of top squeeze plate in downward direction
 const double u_in = 0.5;
-const double temperature = 300; // assuming isothermal flow
+const double temperature = 299.904; // assuming isothermal flow (K)
 const double R = 287.05; // gas constant (air)
 const double atm = 101325; // atomspheric pressure
 double mu = 0.00392; // dynamic viscosity (air)
@@ -33,10 +33,10 @@ const double dt = 0.1; // time step
 const double t_loop = 50; // iterations per time step
 
 // Cylinder Geometry
-const double cx = lx / 4.5; // Center x-coordinate (placed 1/3 downstream)
-const double cy = ly / 2.0; // Center y-coordinate (centered vertically)
+const double cx = lx / 4.5; // Center x-coordinate 
+const double cy = ly / 2.0; // Center y-coordinate 
 const double cr = 0.3;      // Cylinder radius
-const double cr_sq = cr * cr; // Radius squared (for distance check)
+const double cr_sq = cr * cr;
 
 struct linearSystem {
     vector<vector<double>> aP;
@@ -171,14 +171,14 @@ void solveMomentum(vector<vector<double>>& u, vector<vector<double>>& v, const v
             double dist_sq = (x_pos - cx)*(x_pos - cx) + (y_pos - cy)*(y_pos - cy);
 
             if (dist_sq <= cr_sq) {
-                // Node is INSIDE obstacle
+                // grid point inside obstacle
                 U.aE[i][j] = 0.0;
                 U.aW[i][j] = 0.0;
                 U.aN[i][j] = 0.0;
                 U.aS[i][j] = 0.0;
-                U.aP[i][j] = 1.0e30; // Huge number to dominate the equation
-                U.b[i][j] = 0.0;     // Desired velocity is 0
-                ap_u[i][j] = 1.0e30; // Store huge ap for Pressure Correction step
+                U.aP[i][j] = 1.0e30;
+                U.b[i][j] = 0.0;
+                ap_u[i][j] = 1.0e30;
             } else {
                 if (i == x-2) {
                     u_star[i+1][j] = u_star[i][j] * massFlowRateRatio(u_star, rho);
@@ -228,7 +228,10 @@ void solveMomentum(vector<vector<double>>& u, vector<vector<double>>& v, const v
             double dist_sq = (x_pos - cx)*(x_pos - cx) + (y_pos - cy)*(y_pos - cy);
 
             if (dist_sq <= cr_sq) {
-                V.aE[i][j] = 0.0; V.aW[i][j] = 0.0; V.aN[i][j] = 0.0; V.aS[i][j] = 0.0;
+                V.aE[i][j] = 0.0;
+                V.aW[i][j] = 0.0;
+                V.aN[i][j] = 0.0;
+                V.aS[i][j] = 0.0;
                 V.aP[i][j] = 1.0e30;
                 V.b[i][j] = 0.0;
                 ap_v[i][j] = 1.0e30;
