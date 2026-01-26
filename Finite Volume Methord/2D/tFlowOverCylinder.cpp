@@ -7,8 +7,8 @@
 using namespace std;
 
 // number of grids
-const int x = 400; 
-const int y = 200;
+const int x = 200; 
+const int y = 100;
 
 const double lx = 2.0; // Cavity length
 const double ly = 1.0; // Cavity height
@@ -28,7 +28,7 @@ const double u_lid = 1; // velocity of top squeeze plate in downward direction
 const double temperature = 299.904; // assuming isothermal process
 const double R = 287.05; // gas constant (air)
 const double atm = 101325; // atomspheric pressure
-double mu = 1.8e-5; // dynamic viscosity (air)
+double mu = 1.8e-2; // dynamic viscosity (air)
 
 // solver constants
 const double beta_star = 0.09;
@@ -151,8 +151,8 @@ double massFlowRateRatio(const vector<vector<double>>& u, const vector<vector<do
 void setBoundaryConditons(vector<vector<double>>& u, vector<vector<double>>& v, vector<vector<double>>& k, vector<vector<double>>& omega, const vector<vector<double>>& rho) {
     // u for top and bottom wall
     for (int i = 0; i < x; i++) {
-        u[i][0] = -u[i][1]; // bottom wall
-        u[i][y] = - u[i][y-1]; // top wall
+        u[i][0] = u[i][1]; // bottom wall
+        u[i][y] = u[i][y-1]; // top wall
     }
 
     // u for left and right wall
@@ -163,8 +163,8 @@ void setBoundaryConditons(vector<vector<double>>& u, vector<vector<double>>& v, 
 
     // v for top and bottom wall
     for (int i = 0; i <= x; i++) {
-        v[i][0] = 0.0; // bottom wall
-        v[i][y-1] = 0.0; // top wall
+        v[i][0] = v[i][1]; // bottom wall
+        v[i][y-1] = v[i][y-2]; // top wall
     }
 
     // v for left and right wall
@@ -797,6 +797,8 @@ int main() {
 
             u_star = u;
             v_star = v;
+
+            solveEddyViscosity(u, v, rho, k, omega, mu_t, tensor_dot);
 
             solveDensity(rho, p);
             

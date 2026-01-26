@@ -6,11 +6,14 @@
 using namespace std;
 
 // number of grids
-const int x = 129; 
-const int y = 129;
+const int x = 180; 
+const int y = 30;
 
-const double lx = 1.0; // Cavity length
-const double ly = 1.0; // Cavity height
+const double lx = 1.5; // Cavity length
+const double ly = 0.15; // Cavity height
+
+const double sx = 0.3;
+const double sy = 0.075;
 
 const double dx = lx / (x - 1);
 const double dy = ly / (y - 1);
@@ -22,12 +25,12 @@ const double alpha_v = 0.5;
 const double alpha_k = 0.5;
 const double alpha_omega = 0.5;
 
-// double v_vel = 0.1;
+//double v_vel = 1;
 const double u_lid = 1; // velocity of top squeeze plate in downward direction
 const double temperature = 299.904; // assuming isothermal process
 const double R = 287.05; // gas constant (air)
 const double atm = 101325; // atomspheric pressure
-double mu = 0.01177; // dynamic viscosity (air)
+double mu = 0.001; // dynamic viscosity (air)
 
 // solver constants
 const double beta_star = 0.09;
@@ -45,9 +48,9 @@ const double gamma_1 = (beta_1 / beta_star) - (sigma_omega_1 * kappa * kappa / s
 const double gamma_2 = (beta_2 / beta_star) - (sigma_omega_2 * kappa * kappa / sqrt(beta_star));
 const double a_1_const = 0.31;
 
-const double T = 5; // total time of solver
-const double dt = 0.05; // time step
-const double t_loop = 5; // iterations per time step
+const double T = 10; // total time of solver
+const double dt = 0.001; // time step
+const double t_loop = 1; // iterations per time step
 
 struct linearSystem {
     vector<vector<double>> aP;
@@ -115,17 +118,32 @@ void solveDensity(vector<vector<double>>& rho, const vector<vector<double>>& p) 
     }
 }
 
+double massFlowRateRatio(const vector<vector<double>>& u, const vector<vector<double>>& rho) {
+    double massFlowIn = 0.0;
+    double massFlowOut = 0.0;
+    for (int j = 1; j < y; j++) {
+        massFlowIn += u[0][j] + 0.5 * (rho[0][j] + rho[1][j]);
+        massFlowOut += u[x-1][j] + 0.5 * (rho[x-1][j] + rho[x][j]);
+    }
+
+    return massFlowIn / massFlowOut;
+}
+
 void setBoundaryConditons(vector<vector<double>>& u, vector<vector<double>>& v, vector<vector<double>>& k, vector<vector<double>>& omega, const vector<vector<double>>& rho) {
     // u for top and bottom wall
     for (int i = 0; i < x; i++) {
         u[i][0] = -u[i][1]; // bottom wall
-        u[i][y] = 2 * u_lid - u[i][y-1]; // top wall
+        u[i][y] = - u[i][y-1]; // top wall
     }
 
-    // u for left and right wall
-    for (int j = 0; j <= y; j++) {
-        u[0][j] = 0.0; // left wall
-        u[x-1][j] = 0.0; // right wall
+    for (int j = 0; j < y + 1; j++) {
+        // inlet
+        if (j >= (sy * y / ly)) {
+            u[0][j] = u_lid;
+        } else {
+            u[0][j] = 0.0;
+        }
+        u[x-1][j] = u[x-2][j];
     }
 
     // v for top and bottom wall
@@ -137,7 +155,7 @@ void setBoundaryConditons(vector<vector<double>>& u, vector<vector<double>>& v, 
     // v for left and right wall
     for (int j = 0; j < y; j++) {
         v[0][j] = -v[1][j]; // left wall
-        v[x][j] = -v[x-1][j]; // right wall
+        v[x][j] = v[x-1][j]; // right wall
     }
 
     // k and omega for top and bottom wall
@@ -150,13 +168,13 @@ void setBoundaryConditons(vector<vector<double>>& u, vector<vector<double>>& v, 
     }
 
     // k and omega for left and right wall
-    for (int j = 1; j < y; j++) {
-        k[0][j] = -k[1][j]; // left wall
-        k[x][j] = -k[x-1][j]; // right wall
+    // for (int j = 1; j < y; j++) {
+    //     k[0][j] = -k[1][j]; // left wall
+    //     k[x][j] = -k[x-1][j]; // right wall
 
-        omega[0][j] = 2 * ((60 * mu) / (rho[1][j] * beta_1 * pow(getWallDistance(1, j), 2.0))) - omega[1][j]; // left wall
-        omega[x][j] = 2 * ((60 * mu) / (rho[x-1][j] * beta_1 * pow(getWallDistance(x-1, j), 2.0))) - omega[x-1][j]; // right wall
-    }
+    //     omega[0][j] = 2 * ((60 * mu) / (rho[1][j] * beta_1 * pow(getWallDistance(1, j), 2.0))) - omega[1][j]; // left wall
+    //     omega[x][j] = 2 * ((60 * mu) / (rho[x-1][j] * beta_1 * pow(getWallDistance(x-1, j), 2.0))) - omega[x-1][j]; // right wall
+    // }
 }
 
 void solveEddyViscosity(const vector<vector<double>>& u, const vector<vector<double>>& v, const vector<vector<double>>& rho, const vector<vector<double>>& k, const vector<vector<double>>& omega, vector<vector<double>>& mu_t, vector<vector<double>>& tensor_dot) {
@@ -251,12 +269,28 @@ void solveMomentum(vector<vector<double>>& u, vector<vector<double>>& v, const v
 
             double S_u_DC = 0.5 * Fe * ((1 - alpha_e) * fluxLimiter(re) - alpha_e * fluxLimiter(re)) * (u[i+1][j] - u[i][j]) + 0.5 * Fw * (alpha_w * fluxLimiter(rw) - (1 - alpha_w) * fluxLimiter(rw)) * (u[i][j] - u[i-1][j]) + 0.5 * Fn * ((1 - alpha_n) * fluxLimiter(rn) - alpha_n * fluxLimiter(rn)) * (u[i][j+1] - u[i][j]) + 0.5 * Fs * (alpha_s * fluxLimiter(rs) - (1 - alpha_s) * fluxLimiter(rs)) * (u[i][j] - u[i][j-1]);
 
-            U.aE[i][j] = ae;
-            U.aW[i][j] = aw;
-            U.aN[i][j] = an;
-            U.aS[i][j] = as;
-            U.aP[i][j] = ap_u_unrelaxed / alpha_u;
-            U.b[i][j] = pres_u + S_u_DC + ap0 * u_old[i][j] + (1.0 - alpha_u) * U.aP[i][j] * u[i][j];
+            if (i == x-2) {
+                u_star[i+1][j] = u_star[i][j] * massFlowRateRatio(u_star, rho);
+            }
+
+            double x_dis = abs(i - 0.5) * dx;
+            double y_dis = abs(j - 0.5) * dy;
+
+            if (x_dis <= sx && y_dis <=sy) {
+                U.aE[i][j] = 0.0;
+                U.aW[i][j] = 0.0;
+                U.aN[i][j] = 0.0;
+                U.aS[i][j] = 0.0;
+                U.aP[i][j] = 1e+50;
+                U.b[i][j] = 0.0;
+            } else {
+                U.aE[i][j] = ae;
+                U.aW[i][j] = aw;
+                U.aN[i][j] = an;
+                U.aS[i][j] = as;
+                U.aP[i][j] = ap_u_unrelaxed / alpha_u;
+                U.b[i][j] = pres_u + S_u_DC + ap0 * u_old[i][j] + (1.0 - alpha_u) * U.aP[i][j] * u[i][j];
+            }
             ap_u[i][j] = U.aP[i][j];
         }
     }
@@ -327,12 +361,24 @@ void solveMomentum(vector<vector<double>>& u, vector<vector<double>>& v, const v
 
             double S_v_DC = 0.5 * Fe * ((1 - alpha_e) * fluxLimiter(re) - alpha_e * fluxLimiter(re)) * (v[i+1][j] - v[i][j]) + 0.5 * Fw * (alpha_w * fluxLimiter(rw) - (1 - alpha_w) * fluxLimiter(rw)) * (v[i][j] - v[i-1][j]) + 0.5 * Fn * ((1 - alpha_n) * fluxLimiter(rn) - alpha_n * fluxLimiter(rn)) * (v[i][j+1] - v[i][j]) + 0.5 * Fs * (alpha_s * fluxLimiter(rs) - (1 - alpha_s) * fluxLimiter(rs)) * (v[i][j] - v[i][j-1]);
 
-            V.aE[i][j] = ae;
-            V.aW[i][j] = aw;
-            V.aN[i][j] = an;
-            V.aS[i][j] = as;
-            V.aP[i][j] = ap_v_unrelaxed / alpha_v;
-            V.b[i][j] = pres_v + S_v_DC + ap0 * v_old[i][j] + (1.0 - alpha_v) * V.aP[i][j] * v[i][j];
+            double x_dis = abs(i - 0.5) * dx;
+            double y_dis = abs(j - 0.5) * dy;
+
+            if (x_dis <= sx && y_dis <=sy) {
+                V.aE[i][j] = 0.0;
+                V.aW[i][j] = 0.0;
+                V.aN[i][j] = 0.0;
+                V.aS[i][j] = 0.0;
+                V.aP[i][j] = 1e+50;
+                V.b[i][j] = 0;
+            } else {
+                V.aE[i][j] = ae;
+                V.aW[i][j] = aw;
+                V.aN[i][j] = an;
+                V.aS[i][j] = as;
+                V.aP[i][j] = ap_v_unrelaxed / alpha_v;
+                V.b[i][j] = pres_v + S_v_DC + ap0 * v_old[i][j] + (1.0 - alpha_v) * V.aP[i][j] * v[i][j];
+            }
             ap_v[i][j] = U.aP[i][j];
         }
     }
@@ -395,7 +441,7 @@ void pressureCorrection(const vector<vector<double>>& u_star, const vector<vecto
 
     for (int j = 0; j < y + 1; j++) {
         p_prime[0][j] = p_prime[1][j];
-        p_prime[x][j] = p_prime[x - 1][j];
+        p_prime[x][j] = 0.0;
     }
 }
 
@@ -681,7 +727,7 @@ int main() {
     vector<vector<double>> mu_t(x + 1, vector<double>(y + 1, 0));
     vector<vector<double>> tensor_dot(x + 1, vector<double>(y + 1, 0));
     
-    int iter = 0;
+    int iteration = 0;
     double max_err = 1.0;
     int centerline_index = (x + 1) / 2; // For convergence check
 
@@ -689,6 +735,7 @@ int main() {
     
     // outer loop
     for (double time = 0; time < T; time += dt) {
+        iteration++;
         u_old = u;
         v_old = v;
         rho_old = rho;
@@ -719,12 +766,14 @@ int main() {
             setBoundaryConditons(u, v, k, omega, rho);
 
             for (int j = 0; j <= y; j++) {
-                max_err = max(max_err, abs(u_history[64][j] - u[64][j]));
+                max_err = max(max_err, abs(u_history[centerline_index][j] - u[centerline_index][j]));
             }
             
             cout << "Iteration: " << iter << " " << max_err << '\r' << flush;
         }
-        writeResults(u, v, p, rho, k, omega, mu_t, time);
+        if (iteration % 1000 == 0) {
+            writeResults(u, v, p, rho, k, omega, mu_t, iteration);
+        }
     }
 
     //writeResults(u, v, p, rho, dy);
